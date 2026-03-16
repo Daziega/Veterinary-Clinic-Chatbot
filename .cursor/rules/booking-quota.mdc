@@ -1,0 +1,278 @@
+---
+description: Surgical booking quota and drop-off rules for the veterinary clinic chatbot
+alwaysApply: true
+---
+
+## Surgical Booking Quota Rules
+
+This rule defines the **authoritative business logic** for surgical bookings in the Veterinary Clinic
+Chatbot. Cursor agents and engineers **must treat this file as the canonical reference** whenever they
+propose, validate, or confirm surgical appointments, or modify any related prompts, flows, or code.
+
+The system manages surgery days using an **inventory-of-minutes model** (a daily quota of minutes),
+plus **species-specific constraints** (dog-count limit and mandatory drop-off windows).
+
+---
+
+### 1. Operational Capacity ("The Quota")
+
+The schedule is managed as a **finite pool of surgical minutes per day**, not as fixed time slots.
+
+- **Operating days (surgery)**: Monday to Thursday by default  
+  - Friday, Saturday, and Sunday are **blocked by default for surgery**, unless business rules are
+    explicitly updated.
+- **Surgical work window**: 09:00–13:00 (internal surgery period; not exposed to clients).
+- **Maximum daily capacity**: **240 minutes** total available per day for surgical work.
+- **Fill logic**: Each confirmed appointment has a **Time Cost (minutes)** (see Section 2) that is
+  subtracted from this 240-minute daily quota.
+
+**Quota rule (hard constraint)**
+
+- Let `minutes_already_occupied` be the sum of Time Costs of all confirmed surgeries on a given day
+  (all species).
+- Let `minutes_for_new_appointment` be the Time Cost of the requested surgery from Section 2.
+- The system **must never** confirm a new appointment if:
+  - `minutes_already_occupied + minutes_for_new_appointment > 240`.
+- Remaining minutes for a date are:
+  - `remaining_minutes = 240 − minutes_already_occupied`.
+
+Agents and code **must not** offer, propose, or confirm any combination of surgeries on a single
+day whose total Time Cost exceeds **240 minutes**.
+
+---
+
+### 2. Master Table of Services and Time Costs
+
+The AI Agent must classify each surgical request and assign a **Time Cost (minutes)** using the tables
+below. These are the **only** values that may be subtracted from the 240-minute quota unless this
+rule is explicitly updated.
+
+#### 2.1 Species: CAT (No quantity limit; only time limit)
+
+For cats, there is **no daily quantity limit** on the number of patients. Cats are constrained only
+by the **daily minutes quota** defined in Section 1.
+
+**Cat services and Time Cost**
+
+| Service                  | Time (minutes) |
+| ------------------------ | -------------- |
+| Male cat sterilisation   | 12             |
+| Female cat sterilisation | 15             |
+
+**Notes**
+
+- An internal **"Stray cat"** flag or alert may be set where relevant, but it **does not change** the
+  Time Cost; the minutes remain as per the table above.
+- All cat sterilisation bookings must still respect the **daily 240-minute quota**.
+
+#### 2.2 Species: DOG (Subject to quantity restriction)
+
+For dogs, the system must respect **both**:
+
+- The **time** consumed (minutes from the 240-minute quota), and
+- A **hard daily dog-count limit** (see Section 3).
+
+Time for dogs is determined by **sex and weight** as reported by the client.
+
+**Dog categories and Time Cost**
+
+| Category               | Time (minutes) |
+| ---------------------- | -------------- |
+| Male dog (any weight)  | 30             |
+| Female dog (0–10 kg)   | 45             |
+| Female dog (10–20 kg)  | 50             |
+| Female dog (20–30 kg)  | 60             |
+| Female dog (30–40 kg)  | 60             |
+| Female dog (>40 kg)    | 70             |
+
+Any classification logic, prompt, or API **must map** dog surgeries into one of the categories
+above and use the associated Time Cost, unless and until this rule is updated.
+
+---
+
+### 3. Restriction and Blocking Algorithm ("The Tetris")
+
+To confirm a date for a new surgical appointment, the system must **simultaneously** satisfy both
+of the following rules. If **either** rule fails, the date is considered **"NOT AVAILABLE"** for that
+appointment.
+
+#### Rule 1: Time validation (sum ≤ 240)
+
+Let:
+
+- `minutes_already_occupied` = sum of Time Costs (in minutes) for all confirmed appointments on that
+  date (all species).
+- `minutes_for_new_appointment` = Time Cost for the requested service, from Section 2.
+
+The time rule is:
+
+`minutes_already_occupied + minutes_for_new_appointment ≤ 240`
+
+If this inequality does **not** hold, the system **must not** confirm a booking for that date.
+
+#### Rule 2: Dog limit (max 2)
+
+If the new appointment is **Species: DOG**:
+
+- Let `dog_count_for_the_day` = number of dog surgeries already confirmed for that date.
+- The dog-count rule is:
+
+`dog_count_for_the_day + 1 ≤ 2`
+
+If there are already **2 dogs** scheduled on a given day, the system must **block that day for any
+further dog requests**, even if there are still minutes remaining within the 240-minute quota.
+
+**Exception (cats unaffected by dog limit)**
+
+- The dog-count rule **does not** apply to cats.
+- A day with 2 dogs may still accept additional cats, as long as the **time rule** remains satisfied
+  (total minutes ≤ 240).
+
+#### Example: Date NOT AVAILABLE for dogs but still available for cats
+
+- Assume a Monday already has:
+  - 2 dog surgeries confirmed (any dog categories), and
+  - `minutes_already_occupied = 160`.
+- A new **dog** request with `minutes_for_new_appointment = 30` arrives:
+  - Time rule: `160 + 30 = 190 ≤ 240` → **passes**.
+  - Dog-count rule: `dog_count_for_the_day` is already 2 → `2 + 1 = 3 > 2` → **fails**.
+  - Result: the date is **NOT AVAILABLE** for a new dog surgery.
+- A new **cat** sterilisation request can still be accepted as long as the **time rule** holds,
+  because cats are **not** subject to the dog-count limit.
+
+---
+
+### 4. Species-Specific Drop-Off Windows (Mandatory)
+
+Drop-off times are **species-specific and non-negotiable**. The system may **only** offer or confirm
+appointments whose **drop-off** falls within the correct window for that species and day.
+
+**Drop-off windows**
+
+| Species | Drop-off window      | Applicable days                             |
+| ------- | -------------------- | ------------------------------------------- |
+| Cats    | 08:00–09:00 (strict) | Monday to Friday                            |
+| Dogs    | 09:00–10:30 (strict) | Operating days (Monday to Thursday)        |
+
+#### Validation rules
+
+- **Cats**
+  - A cat **cannot** be dropped off outside **08:00–09:00**.
+  - The system must **not** confirm any cat appointment that would require a drop-off outside this
+    window.
+  - On operating days (Monday–Thursday), cats use the **08:00–09:00** window.
+  - On Friday (if the clinic opens for cats), the same **08:00–09:00** window applies.
+
+- **Dogs**
+  - A dog **cannot** be dropped off outside **09:00–10:30**.
+  - The system must **not** confirm any dog appointment that would require a drop-off outside this
+    window.
+
+**Summary**
+
+- Cats: drop-off **08:00–09:00**, Monday–Friday.
+- Dogs: drop-off **09:00–10:30**, Monday–Thursday (operating days).
+
+Drop-off-window validation is **mandatory** and must be enforced in addition to the quota and
+dog-count rules.
+
+---
+
+### 5. Communication and Logistics Protocol
+
+The system must clearly distinguish between **Booking** and **Drop-off** when communicating with
+clients:
+
+- **Booking**: The **day of surgery** that is being reserved.
+- **Drop-off**: The **time window** during which the client must bring the animal to the clinic.
+
+Clients **never** choose or see a specific internal surgery start time (e.g. 10:30). They only choose
+the **day**, and the system instructs them on the correct **drop-off window**.
+
+#### Client communication rules
+
+| Rule                            | Description |
+| ------------------------------- | ----------- |
+| Hide surgical times             | The client must **never** select a specific surgical time. All flows should ask the client to choose **only a day** for surgery, not a time slot. |
+| Species-specific drop-off text  | On confirming an appointment, the system must provide the correct species-specific drop-off window: <br> - **Cats**: “The cat must be dropped off strictly between 08:00 and 09:00 in the morning.” <br> - **Dogs**: “The dog must be dropped off strictly between 09:00 and 10:30 in the morning for preparation.” |
+| Fasting protocol                | Every confirmed surgical appointment must include fasting instructions: the animal must **fast from midnight the night before** (no food; follow clinic guidance on water/medications). |
+
+Any prompts or UI copy may paraphrase these messages, but **must not** change the underlying
+constraints (day-only booking, species-specific drop-off windows, fasting from midnight).
+
+---
+
+### 6. Implementation Notes for Engineers
+
+These notes guide how to enforce the rules above in both code and conversational flows.
+
+- **Represent daily quota as remaining minutes**
+  - Track, per operating day, `minutes_already_occupied` and compute
+    `remaining_minutes = 240 − minutes_already_occupied`.
+  - When evaluating a new request, look up the Time Cost from Section 2 and ensure
+    `remaining_minutes − time_cost ≥ 0` before confirming.
+
+- **Track daily dog count separately from minutes**
+  - Maintain `dog_count_for_the_day` for each operating day.
+  - When the requested species is DOG, enforce `dog_count_for_the_day + 1 ≤ 2` **before** confirming.
+  - For cats, do **not** consult the dog-count limit; only the minutes quota applies.
+
+- **Validate all conditions before confirming**
+  - The booking flow (agent logic + backend) should:
+    1. Classify the request (species, sex, weight) and derive `time_cost`.
+    2. Confirm the date is an allowed **operating day** for that species.
+    3. Check the **time rule** (total minutes ≤ 240).
+    4. If species is DOG, check the **dog-count rule** (max 2 dogs per operating day).
+    5. Check the **species-specific drop-off window** (Section 4).
+    6. Only if all relevant conditions pass, mark the date as **available** and proceed to booking.
+
+- **Enforce species-specific drop-off windows in flows**
+  - When proposing dates, surface only those days where:
+    - The operating-day, quota, and dog-count rules pass; and
+    - The required drop-off window is valid for the species.
+  - Chatbot messages and UI should always communicate the **drop-off window**, not an exact surgery
+    start time.
+
+- **Communicate using day + drop-off window**
+  - Example phrasing for cats:  
+    “We have booked your cat for surgery on **[DAY]**. Please drop off your cat **between 08:00 and
+    09:00 in the morning**.”
+  - Example phrasing for dogs:  
+    “We have booked your dog for surgery on **[DAY]**. Please drop off your dog **between 09:00 and
+    10:30 in the morning for preparation**.”
+
+- **Centralise configuration**
+  - Wherever possible, store these parameters in shared configuration:
+    - Operating days.
+    - Maximum daily capacity (240 minutes).
+    - Service Time Costs (Section 2).
+    - Drop-off windows by species (Section 4).
+  - Ensure both backend logic and conversational prompts read from the same configuration to avoid
+    drift.
+
+---
+
+### 7. Booking-Quota Decision Flow (Illustrative)
+
+The following diagram is an **illustrative aid** for understanding the quota and blocking logic. The
+textual rules above remain the formal source of truth.
+
+```mermaid
+flowchart TD
+  start["New surgical request"] --> classify["Classify species + service"]
+  classify --> timeCost["Lookup Time Cost"]
+  timeCost --> checkDay["Is day an operating day?"]
+  checkDay -->|"No"| notAvailable["Date NOT AVAILABLE"]
+  checkDay -->|"Yes"| checkMinutes["Check minutes ≤ 240"]
+  checkMinutes -->|"No"| notAvailable
+  checkMinutes -->|"Yes"| speciesCheck["Species == DOG?"]
+  speciesCheck -->|"No (cat)"| dropoffCat["Check cat drop-off 08:00–09:00"]
+  speciesCheck -->|"Yes"| checkDogs["Check dog_count + 1 ≤ 2"]
+  checkDogs -->|"No"| notAvailable
+  checkDogs -->|"Yes"| dropoffDog["Check dog drop-off 09:00–10:30"]
+  dropoffCat -->|"Invalid"| notAvailable
+  dropoffDog -->|"Invalid"| notAvailable
+  dropoffCat -->|"Valid"| available["Date AVAILABLE"]
+  dropoffDog -->|"Valid"| available["Date AVAILABLE"]
+```
+
