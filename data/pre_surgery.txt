@@ -1,0 +1,7 @@
+Paste or sync the clinic's official pre-surgery documentation here.
+
+For development, you can copy the content from:
+- https://veterinary-clinic-teal.vercel.app/en/docs/instructions-before-operation
+
+This file is used by the RAG pipeline in clinic_bot.rag to build a vector store.
+
