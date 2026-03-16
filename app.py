@@ -1,6 +1,5 @@
 import os
 from flask import Flask, request, jsonify, render_template_string
-from werkzeug.serving import make_server
 from langchain_openai import ChatOpenAI
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_core.chat_history import BaseChatMessageHistory
@@ -8,9 +7,6 @@ from langchain_community.chat_message_histories import ChatMessageHistory
 from langchain_core.runnables.history import RunnableWithMessageHistory
 
 app = Flask(__name__)
-
-# Control flag for Graceful shutdown
-stop_flag = False
 
 HTML_TEMPLATE = """
 <!DOCTYPE html>
@@ -178,13 +174,6 @@ def ask_bot():
         return jsonify({"msg": bot_msg})
     except Exception as e:
         return jsonify({"msg": "Error: " + str(e)}), 500
-
-def run_server():
-    server = make_server("0.0.0.0", 5000, app)
-    server.timeout = 1
-    print("Starting Vet Clinic server at http://0.0.0.0:5000")
-    while not stop_flag:
-        server.handle_request()
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5001, debug=True)
