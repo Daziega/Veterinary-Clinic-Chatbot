@@ -1,16 +1,31 @@
 import os
+from typing import List
+
 from flask import Flask, request, jsonify, render_template_string
-from werkzeug.serving import make_server
 from langchain_openai import ChatOpenAI
+from langchain_core.messages import BaseMessage
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_core.chat_history import BaseChatMessageHistory
-from langchain_community.chat_message_histories import ChatMessageHistory
 from langchain_core.runnables.history import RunnableWithMessageHistory
 
-app = Flask(__name__)
 
-# Control flag for Graceful shutdown
-stop_flag = False
+class InMemoryHistory(BaseChatMessageHistory):
+    """Minimal in-memory chat history (replaces langchain-community dep)."""
+
+    def __init__(self) -> None:
+        self._messages: List[BaseMessage] = []
+
+    @property
+    def messages(self) -> List[BaseMessage]:
+        return self._messages
+
+    def add_message(self, message: BaseMessage) -> None:
+        self._messages.append(message)
+
+    def clear(self) -> None:
+        self._messages.clear()
+
+app = Flask(__name__)
 
 HTML_TEMPLATE = """
 <!DOCTYPE html>
@@ -119,7 +134,7 @@ _store = {}
 def get_session_history(session_id: str) -> BaseChatMessageHistory:
     """Return the message history for a given session id."""
     if session_id not in _store:
-        _store[session_id] = ChatMessageHistory()
+        _store[session_id] = InMemoryHistory()
     return _store[session_id]
 
 # Initialize LLM and Chain only if API key is present
@@ -178,13 +193,6 @@ def ask_bot():
         return jsonify({"msg": bot_msg})
     except Exception as e:
         return jsonify({"msg": "Error: " + str(e)}), 500
-
-def run_server():
-    server = make_server("0.0.0.0", 5000, app)
-    server.timeout = 1
-    print("Starting Vet Clinic server at http://0.0.0.0:5000")
-    while not stop_flag:
-        server.handle_request()
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5001, debug=True)
