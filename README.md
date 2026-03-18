@@ -85,3 +85,52 @@ cd Veterinary-Clinic-Chatbot
 
 2. Open the project in Cursor to take advantage of the repository rules in `.cursor/rules/repository.mdc`.
 
+3. Create a `.env` file (copy from `.env.example`) and add your `OPENAI_API_KEY`.
+
+### Deploying to Vercel
+
+The app is configured for deployment on [Vercel](https://vercel.com) as a serverless Flask application.
+
+**Prerequisites**
+
+- A [Vercel account](https://vercel.com/signup)
+- An [OpenAI API key](https://platform.openai.com/api-keys) for the chatbot
+
+**Steps**
+
+1. **Install the Vercel CLI** (optional, for local deployment):
+
+   ```bash
+   npm i -g vercel
+   ```
+
+2. **Deploy via Git** (recommended):
+
+   - Go to [vercel.com/new](https://vercel.com/new)
+   - Import your GitHub repository: `Daziega/Veterinary-Clinic-Chatbot`
+   - Vercel will auto-detect the Python/Flask setup from `vercel.json` and `requirements.txt`
+   - Add the environment variable:
+     - **Name**: `OPENAI_API_KEY`
+     - **Value**: your OpenAI API key
+   - Click **Deploy**
+
+3. **Or deploy via CLI**:
+
+   ```bash
+   vercel
+   ```
+
+   When prompted, link to an existing project or create a new one. Add `OPENAI_API_KEY` in the Vercel dashboard under **Settings → Environment Variables**.
+
+**Local preview**
+
+```bash
+python -m venv .venv
+source .venv/bin/activate   # On Windows: .venv\Scripts\activate
+pip install -r requirements.txt
+# Set OPENAI_API_KEY in .env or export it
+vercel dev
+```
+
+Then open `http://localhost:3000` to test before deploying.
+
