@@ -5,6 +5,7 @@
       "use": "@vercel/python",
       "config": {
         "maxLambdaSize": "50mb",
+        "maxDuration": 60,
         "includeFiles": [
           "static/**",
           "templates/**",
@@ -17,10 +18,5 @@
   ],
   "routes": [
     { "src": "/(.*)", "dest": "app.py" }
-  ],
-  "functions": {
-    "app.py": {
-      "maxDuration": 60
-    }
-  }
+  ]
 }
