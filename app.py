@@ -12,32 +12,26 @@ from pydantic import BaseModel, Field
 
 from clinic_bot.agent import build_agent, invoke_agent
 
-# ---------------------------------------------------------------------------
-# Logging
-# ---------------------------------------------------------------------------
-
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s  %(levelname)-8s  %(name)s  %(message)s",
 )
 logger = logging.getLogger("vet_clinic")
 
-# ---------------------------------------------------------------------------
-# FastAPI app
-# ---------------------------------------------------------------------------
-
 _BASE_DIR = Path(__file__).resolve().parent
 
 app = FastAPI(title="ENAE25 Veterinary Clinic Chatbot", version="2.0.0")
-app.mount("/static", StaticFiles(directory=str(_BASE_DIR / "static")), name="static")
 
-templates = Jinja2Templates(directory=str(_BASE_DIR / "templates"))
+_static_dir = _BASE_DIR / "static"
+if _static_dir.is_dir():
+    app.mount("/static", StaticFiles(directory=str(_static_dir)), name="static")
+else:
+    logger.warning("Static directory not found at %s — static assets will 404", _static_dir)
+
+_templates_dir = _BASE_DIR / "templates"
+templates = Jinja2Templates(directory=str(_templates_dir))
 
 handler = Mangum(app)
-
-# ---------------------------------------------------------------------------
-# Pydantic models
-# ---------------------------------------------------------------------------
 
 
 class ChatRequest(BaseModel):
@@ -49,15 +43,7 @@ class ChatResponse(BaseModel):
     reply: str
 
 
-# ---------------------------------------------------------------------------
-# Agent (lazy init)
-# ---------------------------------------------------------------------------
-
 _agent = build_agent()
-
-# ---------------------------------------------------------------------------
-# Routes
-# ---------------------------------------------------------------------------
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -87,10 +73,6 @@ async def chat(body: ChatRequest):
         logger.exception("session=%s  error=%s", body.session_id, exc)
         raise HTTPException(status_code=500, detail=f"Error: {exc}") from exc
 
-
-# ---------------------------------------------------------------------------
-# Local dev server
-# ---------------------------------------------------------------------------
 
 if __name__ == "__main__":
     import uvicorn
