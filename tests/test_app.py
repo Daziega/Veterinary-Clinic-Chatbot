@@ -1,74 +1,98 @@
 import pytest
 from unittest.mock import patch, MagicMock
-from app import app, get_session_history, _store
 
-@pytest.fixture
+from fastapi.testclient import TestClient
+
+from app import app
+
+
+@pytest.fixture()
 def client():
-    app.config['TESTING'] = True
-    with app.test_client() as client:
-        yield client
+    return TestClient(app)
+
 
 def test_home_route(client):
-    """AC1: Navigating to the root URL loads the UI successfully."""
-    response = client.get('/')
+    """GET / returns the chat UI page."""
+    response = client.get("/")
     assert response.status_code == 200
-    assert b"Vet Clinic Chatbot" in response.data
+    assert "ENAE25 Veterinary Clinic" in response.text
 
-def test_empty_message(client):
-    """AC2: Submitting an empty message reliably prompts the user without crashing."""
-    response = client.post('/ask_bot', data={'msg': '   ', 'session_id': 'test2'})
-    assert response.status_code == 400
-    json_data = response.get_json()
-    assert json_data['msg'] == "Please send a non-empty message."
+
+def test_chat_empty_message(client):
+    """POST /chat with empty message is rejected by Pydantic validation."""
+    response = client.post("/chat", json={"message": "", "session_id": "t1"})
+    assert response.status_code == 422
+
+
+def test_chat_missing_body(client):
+    """POST /chat with no JSON body is rejected."""
+    response = client.post("/chat")
+    assert response.status_code == 422
+
 
 def test_missing_api_key(client):
-    """AC5: Ensure error handling when API key isn't set (before mock injection)."""
-    with patch('app.os.environ.get', return_value=None):
-        with patch('app._bot_chain', None):
-            response = client.post('/ask_bot', data={'msg': 'hello', 'session_id': 'test'})
+    """When OPENAI_API_KEY is missing the endpoint returns 500."""
+    with patch("app._agent", None):
+        with patch("app.build_agent", return_value=None):
+            response = client.post(
+                "/chat",
+                json={"message": "hello", "session_id": "t2"},
+            )
             assert response.status_code == 500
-            json_data = response.get_json()
-            assert "OPENAI_API_KEY is not set" in json_data['msg']
+            data = response.json()
+            assert "OPENAI_API_KEY" in data["detail"]
 
-@patch('app._bot_chain')
-def test_successful_message(mock_chain, client):
-    """Check successful LLM response formatting."""
-    mock_response = MagicMock()
-    mock_response.content = "Hello, how can I help your pet today?"
-    mock_chain.invoke.return_value = mock_response
 
-    response = client.post('/ask_bot', data={'msg': 'Hi', 'session_id': 'sess1'})
+@patch("app.invoke_agent")
+def test_successful_message(mock_invoke, client):
+    """Successful agent response is returned in the reply field."""
+    mock_invoke.return_value = "Hello, how can I help your pet today?"
+    with patch("app._agent", MagicMock()):
+        response = client.post(
+            "/chat",
+            json={"message": "Hi", "session_id": "sess1"},
+        )
     assert response.status_code == 200
-    json_data = response.get_json()
-    assert json_data['msg'] == "Hello, how can I help your pet today?"
-    
-    # Ensure session id was passed in config
-    mock_chain.invoke.assert_called_once()
-    called_config = mock_chain.invoke.call_args[1].get('config')
-    assert called_config == {"configurable": {"session_id": "sess1"}}
+    data = response.json()
+    assert data["reply"] == "Hello, how can I help your pet today?"
 
-@patch('app._bot_chain')
-def test_error_handling(mock_chain, client):
-    """AC5: Exception handling without exposing stack traces."""
-    mock_chain.invoke.side_effect = Exception("OpenAI API timeout")
-    
-    response = client.post('/ask_bot', data={'msg': 'Hi', 'session_id': 'sess1'})
+
+@patch("app.invoke_agent")
+def test_error_handling(mock_invoke, client):
+    """Exceptions are caught and returned as 500 with detail."""
+    mock_invoke.side_effect = Exception("OpenAI API timeout")
+    with patch("app._agent", MagicMock()):
+        response = client.post(
+            "/chat",
+            json={"message": "Hi", "session_id": "sess2"},
+        )
     assert response.status_code == 500
-    json_data = response.get_json()
-    assert json_data['msg'] == "Error: OpenAI API timeout"
+    data = response.json()
+    assert "OpenAI API timeout" in data["detail"]
 
-def test_get_session_history():
-    """AC4: Check session isolation helper behavior."""
-    # Ensure memory store works independently per session_id
-    id1 = "browser_a"
-    id2 = "browser_b"
-    
-    hist1 = get_session_history(id1)
-    hist2 = get_session_history(id2)
-    
-    assert hist1 is not hist2
-    assert id1 in _store
-    assert id2 in _store
-    
-    # Reset store for cleanup
-    _store.clear()
+
+@patch("app.invoke_agent")
+def test_default_session_id(mock_invoke, client):
+    """Omitting session_id falls back to 'default'."""
+    mock_invoke.return_value = "ok"
+    with patch("app._agent", MagicMock()):
+        response = client.post("/chat", json={"message": "Hi"})
+    assert response.status_code == 200
+    mock_invoke.assert_called_once()
+    _, kwargs_or_args = mock_invoke.call_args
+    assert "default" in mock_invoke.call_args.args or "default" in mock_invoke.call_args.kwargs.values()
+
+
+def test_prompt_loaded_from_file():
+    """SYSTEM_PROMPT is loaded from prompt.md and contains key content."""
+    from clinic_bot.prompt_loader import SYSTEM_PROMPT
+    assert len(SYSTEM_PROMPT) > 100
+    assert "sterilisation" in SYSTEM_PROMPT.lower() or "scheduling" in SYSTEM_PROMPT.lower()
+
+
+def test_config_constants():
+    """Config module exports correct business rule values."""
+    from clinic_bot.config import MAX_DAILY_MINUTES, MAX_DOGS_PER_DAY, OPERATING_DAYS
+    assert MAX_DAILY_MINUTES == 240
+    assert MAX_DOGS_PER_DAY == 2
+    assert OPERATING_DAYS == [0, 1, 2, 3]
