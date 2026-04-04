@@ -1,7 +1,160 @@
-Paste or sync the clinic's official pre-surgery documentation here.
+# Pre-Surgery Instructions and Clinic Information
 
-For development, you can copy the content from:
-- https://veterinary-clinic-teal.vercel.app/en/docs/instructions-before-operation
+## Veterinary Clinic Profile
 
-This file is used by the RAG pipeline in clinic_bot.rag to build a vector store.
+Our clinic is dedicated almost exclusively to preventive medicine:
+- Canine and feline sterilisation (neutering / spaying)
+- Vaccination and microchip identification
 
+We do not offer routine consultations or emergency care. If your animal becomes ill in the future, you will need to contact another practice.
+
+If your animal has any problem related to the sterilisation, you must contact us by phone and WhatsApp during our opening hours and we will assist you.
+
+---
+
+## What the Procedure Involves
+
+Castration is the surgical removal under general anaesthesia of:
+- In males: the testicles (orchiectomy)
+- In females: the ovaries and uterus (ovariohysterectomy)
+
+In females, the incision under normal conditions (no pregnancy or uterine infection) is around 1.5 cm in cats; in dogs it depends on the dog's size. Stitches are intradermal (internal) for the animal's comfort. After the operation, females will no longer come into heat.
+
+Cats can be operated on while in heat. Dogs cannot: you must wait two months after the end of heat before operating, otherwise there is a risk of false ("psychological") pregnancy.
+
+---
+
+## Before the Operation
+
+1. Animals should be vaccinated and dewormed (internal and external) beforehand, including cats that do not go outside.
+2. Any surgery and general anaesthesia carry risks (the worst being death), so ideally the animal should go to theatre in the best condition (healthy and strong). If your animal has any illness, you must inform us before booking the appointment, as surgery may not be indicated or may need to be planned accordingly. In healthy animals, this is a routine procedure and risk is low.
+3. For greater surgical and anaesthetic safety, a pre-operative blood test is recommended. The clinic may refer you to a partner lab for the test and for a check-up if any condition is suspected. You must mention that you are referred by the clinic so that the lab sends us the results. The test is mandatory for animals over 6 years (anaesthetic risk increases with age). The cost of the full blood test is paid at the lab.
+4. If for personal reasons you will not attend your sterilisation appointment, please notify us at least 24 hours in advance; otherwise a surcharge may be applied.
+5. Animals must arrive fasting: the last meal should be 8–12 hours before the operation. They may have water until 1–2 hours before surgery (very important in summer).
+
+---
+
+## Day of Surgery
+
+- Please be on time and bring the signed consent form and the animal's documentation (European passport or health card). From current regulations, microchip and rabies vaccination are mandatory for dogs and cats.
+- If you wish to have the microchip implanted on the day of the operation, this can be done while the animal is under anaesthesia. The cost is separate from the sterilisation (and may include microchip, rabies vaccine, and passport).
+- Cats: must always arrive in a rigid carrier with a blanket or towel inside (to cover them after the procedure and to absorb any fluids such as urine or vomit on the way home). Cardboard boxes or fabric carriers are not acceptable. If bringing more than one cat, each must be in a separate carrier.
+- Dogs: must always be on a collar or harness and lead, never loose. A muzzle is required if they bite strangers.
+- The owner (the person registered as the microchip holder) must complete and sign the informed consent form. If they cannot come in person, they must complete it at home and send it with the animal and the person bringing them. Payment can be made in cash or by card.
+- Pick-up times: approximately 15:00 for cats and 12:00 for dogs. If these times do not suit you, please say so when booking. For dogs, surgery is always scheduled first thing in the morning.
+
+---
+
+## After the Operation
+
+- Animals should stay in a quiet, warm environment (e.g. a bed or heat source if needed). They should rest but may go out for toileting.
+- Water: when they are fully awake, about 4–5 hours after the operation.
+- Food: solid food 6–8 hours after the operation, starting with soft food (e.g. pâtés, jellies, a little ham or a small amount of kibble).
+- Stitches are internal and absorbable, so they do not need to be removed and will disappear on their own.
+- Some licking is normal (we should try to prevent it); if the animal licks compulsively, a recovery suit (cats) or Elizabethan collar (dogs) may be needed. Do not apply products on the wound. You may disinfect only with chlorhexidine-impregnated gauze; other products can damage the wound.
+- In some females the scar may bulge a few days after surgery; this can be normal. Males may have swelling and bruising in the scrotal area in the days after the operation.
+- In both dogs and cats, males can remain fertile for about a month after surgery, so if they live with an unsterilised female, they could still impregnate her.
+
+---
+
+## Medication
+
+- Dogs: capsule/liquid as indicated, e.g. 6 hours after surgery. Anti-inflammatory tablets 24 hours after surgery, at the dose and for the number of days indicated.
+- Cats: syrup or tablet 24 hours after surgery, only if the animal allows it.
+- If the animal has special circumstances and needs extra medication, you will be informed and the cost will be charged separately.
+
+---
+
+## Normal vs Concerning Signs
+
+### Do not worry if:
+- The animal vomits on the day of the operation.
+- The animal is drowsy on the day of the operation and does not want to play (some cats take longer to wake up).
+- The animal does not want to eat or drink in the first 24 hours after the operation; offer appetising food.
+
+### Contact the clinic if:
+- There is active bleeding (not just a few drops of blood).
+- The animal has pale gums and does not respond to stimuli 8 hours after the operation.
+- The animal does not eat or drink within 48 hours.
+- The wound opens or oozes.
+
+Contact us by phone and WhatsApp from the number used to book the appointment, during our opening hours.
+
+---
+---
+
+# Business Rules and Scheduling Logic
+
+## Operational Capacity ("The Quota")
+
+The system manages the schedule based on an inventory-of-minutes model, not on traditional fixed time slots. Each day has a finite pool of surgical minutes; every appointment consumes some of those minutes until the daily capacity is exhausted.
+
+- Operating days: Monday to Thursday (Friday, Saturday, and Sunday are blocked by default for surgery).
+- Surgical work window: 09:00 to 13:00.
+- Maximum daily capacity: 240 minutes total available per day.
+- Each appointment subtracts minutes from this total capacity according to the service table.
+
+Every confirmed surgical appointment has a Time Cost (minutes). The sum of all Time Costs for a given day must never exceed 240 minutes. Remaining minutes = 240 minus the sum of minutes for all already-booked appointments on that date.
+
+---
+
+## Services and Time Costs
+
+### Cats (no daily quantity limit; only time limit)
+
+For cats, there is no daily quantity limit on the number of patients. The only constraint is that the total minutes for all appointments (all species combined) remain within the 240-minute quota.
+
+- Male cat sterilisation: 12 minutes
+- Female cat sterilisation: 15 minutes
+
+### Dogs (subject to quantity restriction)
+
+For dogs, both time and daily dog count must be respected. Time is determined by sex and weight as reported by the client. In addition, there is a hard limit of maximum 2 dogs per operating day, regardless of remaining minutes.
+
+- Male dog (any weight): 30 minutes
+- Female dog (0–10 kg): 45 minutes
+- Female dog (10–20 kg): 50 minutes
+- Female dog (20–30 kg): 60 minutes
+- Female dog (30–40 kg): 60 minutes
+- Female dog (>40 kg): 70 minutes
+
+---
+
+## Restriction and Blocking Algorithm
+
+To confirm a date for a new appointment, the system must validate both of the following conditions. If either condition fails, the date is considered "NOT AVAILABLE" for that appointment.
+
+### Rule 1: Time validation
+minutes_already_occupied + minutes_for_new_appointment must be less than or equal to 240. If this does not hold, the booking is not allowed for that date.
+
+### Rule 2: Dog limit (max 2)
+If the new appointment is for a dog: dog_count_for_the_day + 1 must be less than or equal to 2. If there are already 2 dogs scheduled on a given day, the system must block that day for any further dog request, even if there are minutes remaining.
+
+The dog-count rule does not apply to cats. A day with 2 dogs may still accept additional cats until the 240 minutes are filled.
+
+---
+
+## Species-Specific Drop-Off Windows
+
+Drop-off times are species-specific and non-negotiable. The system shall only offer and confirm appointments whose drop-off falls within the following windows.
+
+- Cats: drop-off 08:00–09:00, Monday to Friday.
+- Dogs: drop-off 09:00–10:30, Monday to Thursday (operating days only).
+
+A cat cannot be dropped off outside 08:00–09:00. A dog cannot be dropped off outside 09:00–10:30. The system must not confirm any appointment that would require a drop-off outside these windows.
+
+---
+
+## Communication and Logistics Protocol
+
+The system distinguishes between "Booking" and "Drop-off":
+- Booking: The day of surgery that is being reserved.
+- Drop-off: The time window during which the client must bring the animal to the clinic.
+
+The client never chooses an exact surgical time. They only choose the day, and the system instructs them on the correct drop-off window.
+
+Upon confirming an appointment:
+- Cats: "The cat must be dropped off strictly between 08:00 and 09:00 in the morning."
+- Dogs: "The dog must be dropped off strictly between 09:00 and 10:30 in the morning for preparation."
+
+Fasting instructions (from midnight the night before) shall be attached to the final confirmation message.
