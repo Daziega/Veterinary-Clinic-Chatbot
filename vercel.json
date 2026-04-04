@@ -1,22 +1,5 @@
 {
-  "builds": [
-    {
-      "src": "app.py",
-      "use": "@vercel/python",
-      "config": {
-        "maxLambdaSize": "50mb",
-        "maxDuration": 60,
-        "includeFiles": [
-          "static/**",
-          "templates/**",
-          "data/**",
-          "prompt.md",
-          "clinic_bot/**"
-        ]
-      }
-    }
-  ],
-  "routes": [
-    { "src": "/(.*)", "dest": "app.py" }
+  "rewrites": [
+    { "source": "/(.*)", "destination": "/app.py" }
   ]
 }

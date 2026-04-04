@@ -22,14 +22,7 @@ _BASE_DIR = Path(__file__).resolve().parent
 
 app = FastAPI(title="ENAE25 Veterinary Clinic Chatbot", version="2.0.0")
 
-_static_dir = _BASE_DIR / "static"
-if _static_dir.is_dir():
-    app.mount("/static", StaticFiles(directory=str(_static_dir)), name="static")
-else:
-    logger.warning("Static directory not found at %s — static assets will 404", _static_dir)
-
-_templates_dir = _BASE_DIR / "templates"
-templates = Jinja2Templates(directory=str(_templates_dir))
+templates = Jinja2Templates(directory=str(_BASE_DIR / "templates"))
 
 handler = Mangum(app)
 
@@ -73,6 +66,11 @@ async def chat(body: ChatRequest):
         logger.exception("session=%s  error=%s", body.session_id, exc)
         raise HTTPException(status_code=500, detail=f"Error: {exc}") from exc
 
+
+# Local dev: serve public/ assets (on Vercel, the public/ dir is served by CDN)
+_public_dir = _BASE_DIR / "public"
+if _public_dir.is_dir():
+    app.mount("/", StaticFiles(directory=str(_public_dir)), name="public")
 
 if __name__ == "__main__":
     import uvicorn
